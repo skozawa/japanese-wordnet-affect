@@ -20,3 +20,11 @@ if [ ! -d resources/WordNet-3.0 ]; then
     mv WordNet-3.0 resources/
     rm WordNet-3.0.tar.gz
 fi
+
+if [ ! -e resources/wnjpn.db ]; then
+    echo "Download Japanese WordNet"
+    wget http://nlpwww.nict.go.jp/wn-ja/data/1.1/wnjpn.db.gz
+    gzip -d wnjpn.db.gz
+    mv wnjpn.db resources/
+fi
+
