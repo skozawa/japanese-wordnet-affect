@@ -43,6 +43,8 @@ Example
 ```
 
 `offset` is offset for WordNet-3.0
+
 `synset` is synset for WordNet-3.0
+
 `jpnwordid` is wordid for word table in Japanese WordNet (sqlite)
 
