@@ -139,8 +139,8 @@ def output_jpn_asynset(asynsets):
 
 
 if __name__ == '__main__':
-    asynsets = load_asynsets("resources/wn-affect-1.1/a-synsets.xml")
-    merged_asynsets = merge_asynset_with_wn(asynsets)
-    asynsets_with_jpn = merge_asynset_with_wnjpn(merged_asynsets)
+    asynsets_16 = load_asynsets("resources/wn-affect-1.1/a-synsets.xml")
+    asynsets_30 = merge_asynset_with_wn(asynsets_16)
+    asynsets_with_jpn = merge_asynset_with_wnjpn(asynsets_30)
     output_jpn_asynset(asynsets_with_jpn)
 
