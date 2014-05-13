@@ -44,7 +44,8 @@ def merge_asynset_with_wn(asynsets):
     wn30 = WordNetCorpusReader(nltk.data.find('resources/WordNet-3.0/dict'))
 
     pos_map = { "noun": "n", "adj": "a", "verb": "v", "adv": "r" }
-    for pos in asynsets.keys():
+    # start from "noun"
+    for pos in ["noun", "adj", "verb", "adv"]:
         for offset in asynsets[pos].keys():
             # Get WordNet-1.6 synset
             synset_16 = wn16._synset_from_pos_and_offset(pos_map[pos], int(offset))
@@ -56,8 +57,12 @@ def merge_asynset_with_wn(asynsets):
             else:
                 (word, p, index) = synset_30.name.split(".")
                 asynsets[pos][offset]["word"] = word
-                asynsets[pos][offset]["synset"] = "%s-%s" % (word, p)
-                asynsets[pos][offset]["offset30"] = str(synset_30.offset)
+                asynsets[pos][offset]["synset"] = synset_30.name
+                asynsets[pos][offset]["db-synset"] = str("%08d-%s" % (synset_30.offset, p))
+                asynsets[pos][offset]["offset"] = str("%08d" % (synset_30.offset))
+                if "noun-offset" in asynsets[pos][offset]:
+                    noffset = asynsets[pos][offset]["noun-offset"]
+                    asynsets[pos][offset]["noun-synset"] = asynsets["noun"][noffset]["synset"]
 
     return asynsets
 
@@ -85,11 +90,9 @@ def _wn30_synsets_from_wn16_synset(synset, wn):
 def merge_asynset_with_wnjpn(asynsets):
     for pos in asynsets.keys():
         for offset in asynsets[pos].keys():
-            if not "synset" in asynsets[pos][offset]: continue
-            words = get_jpnword_from_synsets([asynsets[pos][offset]["synset"]])
-            asynsets[pos][offset]["words"] = [{
-                "wordid": word.wordid, "lemma": word.lemma
-            } for word in words]
+            if not "db-synset" in asynsets[pos][offset]: continue
+            word = get_jpnword_from_synsets([asynsets[pos][offset]["db-synset"]])
+            if word: asynsets[pos][offset]["jpnwordid"] = str(word.wordid)
 
     return asynsets
 
@@ -102,20 +105,36 @@ def get_jpnword_from_synsets(synsets):
     sense = Table('sense', metadata)
     sense_rows = db.execute(sense.select(and_(
         sense.c.lang == 'jpn',
-        sense.c.synset.in_(['07514600-n'])
-    )))
-    if not sense_rows: return []
+        sense.c.synset.in_(synsets)
+    ))).fetchall()
+    if len(sense_rows) == 0: return
 
     word = Table('word', metadata)
-    word_rows = db.execute(word.select(and_(
+    word_row = db.execute(word.select(and_(
         word.c.wordid.in_([ row.wordid for row in sense_rows ])
-    )))
+    ))).fetchone()
 
-    return word_rows
+    return word_row
+
+def output_jpn_asynset(asynsets):
+    from xml.dom import minidom
+    from xml.etree.ElementTree import *
+
+    root = Element('syn-list')
+    for pos in asynsets.keys():
+        pos_node = SubElement(root, "%s-syn-list" % (pos))
+        for offset in asynsets[pos].keys():
+            node = SubElement(pos_node, "%s-syn" % (pos))
+            for attr in ["offset", "synset", "caus-stat", "noun-synset", "jpnword", "jpnwordid"]:
+                if attr in asynsets[pos][offset]:
+                    node.set(attr, asynsets[pos][offset][attr])
+
+    print minidom.parseString(tostring(root)).toprettyxml()
 
 
 if __name__ == '__main__':
     asynsets = load_asynsets("resources/wn-affect-1.1/a-synsets.xml")
     merged_asynsets = merge_asynset_with_wn(asynsets)
     asynsets_with_jpn = merge_asynset_with_wnjpn(merged_asynsets)
+    output_jpn_asynset(asynsets_with_jpn)
 
