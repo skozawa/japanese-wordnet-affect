@@ -58,6 +58,7 @@ def merge_asynset_with_wn(asynsets):
                 (word, p, index) = synset_30.name.split(".")
                 asynsets[pos][offset]["word"] = word
                 asynsets[pos][offset]["synset"] = synset_30.name
+                # db-synset is used to query the japanese wordnet (sqlite)
                 asynsets[pos][offset]["db-synset"] = str("%08d-%s" % (synset_30.offset, p))
                 asynsets[pos][offset]["offset"] = str("%08d" % (synset_30.offset))
                 if "noun-offset" in asynsets[pos][offset]:
@@ -87,16 +88,18 @@ def _wn30_synsets_from_wn16_synset(synset, wn):
 
     return synsets[index]
 
+# Merge asynsets with Japanese WordNet
 def merge_asynset_with_wnjpn(asynsets):
     for pos in asynsets.keys():
         for offset in asynsets[pos].keys():
             if not "db-synset" in asynsets[pos][offset]: continue
-            word = get_jpnword_from_synsets([asynsets[pos][offset]["db-synset"]])
+            word = _get_jpnword_from_synsets([asynsets[pos][offset]["db-synset"]])
             if word: asynsets[pos][offset]["jpnwordid"] = str(word.wordid)
 
     return asynsets
 
-def get_jpnword_from_synsets(synsets):
+# Get japanese word from japanese wordnet
+def _get_jpnword_from_synsets(synsets):
     from sqlalchemy import *
     db = create_engine('sqlite:///resources/wnjpn.db')
     metadata = MetaData(db, reflect=True)
@@ -116,6 +119,7 @@ def get_jpnword_from_synsets(synsets):
 
     return word_row
 
+# Output japanese wordnet affect
 def output_jpn_asynset(asynsets):
     from xml.dom import minidom
     from xml.etree.ElementTree import *
@@ -129,7 +133,9 @@ def output_jpn_asynset(asynsets):
                 if attr in asynsets[pos][offset]:
                     node.set(attr, asynsets[pos][offset][attr])
 
-    print minidom.parseString(tostring(root)).toprettyxml()
+    file = open("jpn-asynset.xml", "w")
+    file.write(minidom.parseString(tostring(root)).toprettyxml())
+    file.close()
 
 
 if __name__ == '__main__':
