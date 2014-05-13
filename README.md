@@ -1,7 +1,7 @@
 japanese-wordnet-affect
 =======================
 
-Create Japanese WordNet-Affect from WordNet, WordNet-Affect, Japanese WordNet.
+Create Japanese WordNet-Affect from WordNet(1.6, 3.0), WordNet-Affect and Japanese WordNet.
 
 
 Requirements
