@@ -119,6 +119,83 @@ def _get_jpnword_from_synsets(synsets):
 
     return word_row
 
+def merge_asynset_with_wnjpn2(asynsets):
+    import nltk
+    from nltk.corpus import WordNetCorpusReader
+    wn = WordNetCorpusReader(nltk.data.find('resources/WordNet-3.0/dict'))
+
+    for pos in asynsets.keys():
+        for offset in asynsets[pos].keys():
+            if not "db-synset" in asynsets[pos][offset]: continue
+            synsets = _retrieve_similar_synset(asynsets[pos][offset]["synset"], wn)
+            words = _get_jpnword_from_synsets2(synsets)
+            asynsets[pos][offset]["jpnword"] = " ".join([word.wordid for word in words])
+
+    return asynsets
+
+# Retrieve similar synsets from WordNet
+def _retrieve_similar_synset(synset, wn):
+    similar_synsets = [synset]
+    searched_words = {}
+
+    synsets = [wn.synset(synset)]
+    while synsets:
+        for synset in synsets:
+            searched_words[synset.name] = 1
+
+        nexts = []
+        for synset in synsets:
+            for syn in _get_similar_synsets(synset, wn):
+                if not syn.name in searched_words:
+                    similar_synsets.append(syn.name)
+                    nexts.append(syn)
+        synsets = nexts
+
+    return similar_synsets
+
+# Get hyponyms, similar, verb groups, entailment, pertainym
+#     (derived forms)
+def _get_similar_synsets(synset, wn):
+    synsets = []
+    synsets.append(synset.hyponyms())
+    synsets.append(synset.similar_tos())
+    synsets.append(synset.verb_groups())
+    synsets.append(synset.entailments())
+    for lemma in synset.lemmas:
+        # for derive_lemma in lemma.derivationally_related_forms():
+        #     try:
+        #         sim = derive_lemma.synset.wup_similarity(synset)
+        #         sim2 = derive_lemma.synset.path_similarity(synset)
+        #         print sim, sim2, synset, derive_lemma.synset
+        #         synsets.append([derive_lemma.synset])
+        #     except:
+        #         print "error"
+        synsets.append(map(lambda x: x.synset, lemma.pertainyms()))
+
+    return list(set(reduce(lambda x,y: x+y, synsets)))
+
+
+# Get japanese word from japanese wordnet
+def _get_jpnword_from_synsets2(synsets):
+    from sqlalchemy import *
+    db = create_engine('sqlite:///resources/wnjpn.db')
+    metadata = MetaData(db, reflect=True)
+
+    jpnwords = []
+    sense = Table('sense', metadata)
+    sense_rows = db.execute(sense.select(and_(
+        sense.c.lang == 'jpn',
+        sense.c.synset.in_(synsets)
+    ))).fetchall()
+    if len(sense_rows) == 0: return []
+
+    word = Table('word', metadata)
+    word_rows = db.execute(word.select(and_(
+        word.c.wordid.in_([ row.wordid for row in sense_rows ])
+    ))).fetchall()
+
+    return word_rows
+
 # Output japanese wordnet affect
 def output_jpn_asynset(asynsets):
     from xml.dom import minidom
@@ -133,14 +210,16 @@ def output_jpn_asynset(asynsets):
                 if attr in asynsets[pos][offset]:
                     node.set(attr, asynsets[pos][offset][attr])
 
-    file = open("jpn-asynset.xml", "w")
+    file = open("jpn-asynset2.xml", "w")
     file.write(minidom.parseString(tostring(root)).toprettyxml())
     file.close()
+
+
 
 
 if __name__ == '__main__':
     asynsets_16 = load_asynsets("resources/wn-affect-1.1/a-synsets.xml")
     asynsets_30 = merge_asynset_with_wn(asynsets_16)
-    asynsets_with_jpn = merge_asynset_with_wnjpn(asynsets_30)
+    asynsets_with_jpn = merge_asynset_with_wnjpn2(asynsets_30)
     output_jpn_asynset(asynsets_with_jpn)
 
