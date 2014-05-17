@@ -1,6 +1,16 @@
 # coding: utf-8
 import os
 os.environ["NLTK_DATA"] = os.getcwd()
+import xml.etree.ElementTree as ET
+from xml.etree.ElementTree import *
+import nltk
+from nltk.corpus import WordNetCorpusReader
+from sqlalchemy import *
+from xml.dom import minidom
+
+WN16 = WordNetCorpusReader(nltk.data.find('resources/wordnet-1.6/dict'))
+WN = WordNetCorpusReader(nltk.data.find('resources/WordNet-3.0/dict'))
+DB = create_engine('sqlite:///resources/wnjpn.db')
 
 # load Wordnet-Affect synsets
 # corpus: a-synset.xml
@@ -10,7 +20,6 @@ os.environ["NLTK_DATA"] = os.getcwd()
 #   }, ...
 # }
 def load_asynsets(corpus):
-    import xml.etree.ElementTree as ET
     tree = ET.parse(corpus)
     root = tree.getroot()
 
@@ -37,21 +46,15 @@ def load_asynsets(corpus):
 
 # Merge WordNet-Affect synsets with WordNet-3.0 synsets
 def merge_asynset_with_wn(asynsets):
-    import nltk
-    from nltk.corpus import WordNetCorpusReader
-
-    wn16 = WordNetCorpusReader(nltk.data.find('resources/wordnet-1.6/dict'))
-    wn30 = WordNetCorpusReader(nltk.data.find('resources/WordNet-3.0/dict'))
-
     pos_map = { "noun": "n", "adj": "a", "verb": "v", "adv": "r" }
     # start from "noun"
     for pos in ["noun", "adj", "verb", "adv"]:
         for offset in asynsets[pos].keys():
             # Get WordNet-1.6 synset
-            synset_16 = wn16._synset_from_pos_and_offset(pos_map[pos], int(offset))
+            synset_16 = WN16._synset_from_pos_and_offset(pos_map[pos], int(offset))
             if not synset_16: continue
 
-            synset_30 = _wn30_synsets_from_wn16_synset(synset_16, wn30)
+            synset_30 = _wn30_synsets_from_wn16_synset(synset_16)
             if not synset_30:
                 asynsets[pos][offset]["missing"] = 1
             else:
@@ -69,11 +72,11 @@ def merge_asynset_with_wn(asynsets):
 
 # Get WordNet-3.0 synset
 # Similarity is calculated by wup_similarity
-def _wn30_synsets_from_wn16_synset(synset, wn):
+def _wn30_synsets_from_wn16_synset(synset):
     (word, p, index) = synset.name.split(".")
     # ADJ_SAT -> ADJ: DO NOT EXIST ADJ_SAT in wordnet.POS_LIST
     if p == 's': p = 'a'
-    synsets = wn.synsets(word, p)
+    synsets = WN.synsets(word, p)
     if len(synsets) == 0: return
 
     synset_sims = {}
@@ -100,52 +103,46 @@ def merge_asynset_with_wnjpn(asynsets):
 
 # Get japanese word from japanese wordnet
 def _get_jpnword_from_synsets(synsets):
-    from sqlalchemy import *
-    db = create_engine('sqlite:///resources/wnjpn.db')
-    metadata = MetaData(db, reflect=True)
+    metadata = MetaData(DB, reflect=True)
 
     jpnwords = []
     sense = Table('sense', metadata)
-    sense_rows = db.execute(sense.select(and_(
+    sense_rows = DB.execute(sense.select(and_(
         sense.c.lang == 'jpn',
         sense.c.synset.in_(synsets)
     ))).fetchall()
     if len(sense_rows) == 0: return
 
     word = Table('word', metadata)
-    word_row = db.execute(word.select(and_(
+    word_row = DB.execute(word.select(and_(
         word.c.wordid.in_([ row.wordid for row in sense_rows ])
     ))).fetchone()
 
     return word_row
 
 def merge_asynset_with_wnjpn2(asynsets):
-    import nltk
-    from nltk.corpus import WordNetCorpusReader
-    wn = WordNetCorpusReader(nltk.data.find('resources/WordNet-3.0/dict'))
-
     for pos in asynsets.keys():
         for offset in asynsets[pos].keys():
             if not "db-synset" in asynsets[pos][offset]: continue
-            synsets = _retrieve_similar_synset(asynsets[pos][offset]["synset"], wn)
+            synsets = _retrieve_similar_synset(asynsets[pos][offset]["synset"])
             words = _get_jpnword_from_synsets2(synsets)
             asynsets[pos][offset]["jpnword"] = " ".join([word.wordid for word in words])
 
     return asynsets
 
 # Retrieve similar synsets from WordNet
-def _retrieve_similar_synset(synset, wn):
+def _retrieve_similar_synset(synset):
     similar_synsets = [synset]
     searched_words = {}
 
-    synsets = [wn.synset(synset)]
+    synsets = [WN.synset(synset)]
     while synsets:
         for synset in synsets:
             searched_words[synset.name] = 1
 
         nexts = []
         for synset in synsets:
-            for syn in _get_similar_synsets(synset, wn):
+            for syn in _get_similar_synsets(synset):
                 if not syn.name in searched_words:
                     similar_synsets.append(syn.name)
                     nexts.append(syn)
@@ -155,7 +152,7 @@ def _retrieve_similar_synset(synset, wn):
 
 # Get hyponyms, similar, verb groups, entailment, pertainym
 #     (derived forms)
-def _get_similar_synsets(synset, wn):
+def _get_similar_synsets(synset):
     synsets = []
     synsets.append(synset.hyponyms())
     synsets.append(synset.similar_tos())
@@ -177,20 +174,18 @@ def _get_similar_synsets(synset, wn):
 
 # Get japanese word from japanese wordnet
 def _get_jpnword_from_synsets2(synsets):
-    from sqlalchemy import *
-    db = create_engine('sqlite:///resources/wnjpn.db')
-    metadata = MetaData(db, reflect=True)
+    metadata = MetaData(DB, reflect=True)
 
     jpnwords = []
     sense = Table('sense', metadata)
-    sense_rows = db.execute(sense.select(and_(
+    sense_rows = DB.execute(sense.select(and_(
         sense.c.lang == 'jpn',
         sense.c.synset.in_(synsets)
     ))).fetchall()
     if len(sense_rows) == 0: return []
 
     word = Table('word', metadata)
-    word_rows = db.execute(word.select(and_(
+    word_rows = DB.execute(word.select(and_(
         word.c.wordid.in_([ row.wordid for row in sense_rows ])
     ))).fetchall()
 
@@ -198,9 +193,6 @@ def _get_jpnword_from_synsets2(synsets):
 
 # Output japanese wordnet affect
 def output_jpn_asynset(asynsets):
-    from xml.dom import minidom
-    from xml.etree.ElementTree import *
-
     root = Element('syn-list')
     for pos in asynsets.keys():
         pos_node = SubElement(root, "%s-syn-list" % (pos))
@@ -213,8 +205,6 @@ def output_jpn_asynset(asynsets):
     file = open("jpn-asynset2.xml", "w")
     file.write(minidom.parseString(tostring(root)).toprettyxml())
     file.close()
-
-
 
 
 if __name__ == '__main__':
