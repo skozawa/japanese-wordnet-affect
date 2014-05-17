@@ -124,18 +124,19 @@ def merge_asynset_with_wnjpn2(asynsets):
     for pos in asynsets.keys():
         for offset in asynsets[pos].keys():
             if not "db-synset" in asynsets[pos][offset]: continue
-            synsets = _retrieve_similar_synset(asynsets[pos][offset]["synset"])
-            words = _get_jpnword_from_synsets2(synsets)
-            asynsets[pos][offset]["jpnword"] = " ".join([word.wordid for word in words])
+            db_synsets = _retrieve_similar_synset(WN.synset(asynsets[pos][offset]["synset"]))
+            words = _get_jpnword_from_synsets2(db_synsets)
+            asynsets[pos][offset]["jpnwords"] = words
 
     return asynsets
 
 # Retrieve similar synsets from WordNet
 def _retrieve_similar_synset(synset):
-    similar_synsets = [synset]
+    if not synset: return []
+    similar_db_synsets = [str("%08d-%s" % (synset.offset, synset.pos))]
     searched_words = {}
 
-    synsets = [WN.synset(synset)]
+    synsets = [synset]
     while synsets:
         for synset in synsets:
             searched_words[synset.name] = 1
@@ -144,11 +145,11 @@ def _retrieve_similar_synset(synset):
         for synset in synsets:
             for syn in _get_similar_synsets(synset):
                 if not syn.name in searched_words:
-                    similar_synsets.append(syn.name)
+                    similar_db_synsets.append(str("%08d-%s" % (syn.offset, syn.pos)))
                     nexts.append(syn)
         synsets = nexts
 
-    return similar_synsets
+    return similar_db_synsets
 
 # Get hyponyms, similar, verb groups, entailment, pertainym
 #     (derived forms)
@@ -196,14 +197,21 @@ def output_jpn_asynset(asynsets):
     root = Element('syn-list')
     for pos in asynsets.keys():
         pos_node = SubElement(root, "%s-syn-list" % (pos))
-        for offset in asynsets[pos].keys():
+        for offset, asynset in asynsets[pos].items():
             node = SubElement(pos_node, "%s-syn" % (pos))
             for attr in ["offset", "synset", "caus-stat", "noun-synset", "jpnword", "jpnwordid"]:
-                if attr in asynsets[pos][offset]:
-                    node.set(attr, asynsets[pos][offset][attr])
+                if attr in asynset:
+                    node.set(attr, asynset[attr])
+            if "jpnwords" in asynset:
+                for word in asynset["jpnwords"]:
+                    word_node = SubElement(node, "jpn-word", {
+                        "wordid": str(word.wordid),
+                        "lemma": word.lemma,
+                        "pos": word.pos,
+                    })
 
     file = open("jpn-asynset2.xml", "w")
-    file.write(minidom.parseString(tostring(root)).toprettyxml())
+    file.write(minidom.parseString(tostring(root)).toprettyxml(encoding='utf-8'))
     file.close()
 
 
