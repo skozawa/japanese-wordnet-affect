@@ -47,7 +47,7 @@ def load_asynsets(corpus):
 # Merge WordNet-Affect synsets with WordNet-3.0 synsets
 def merge_asynset_with_wn(asynsets):
     pos_map = { "noun": "n", "adj": "a", "verb": "v", "adv": "r" }
-    # start from "noun"
+    # start from "noun" because other pos use noun-synset
     for pos in ["noun", "adj", "verb", "adv"]:
         for offset in asynsets[pos].keys():
             # Get WordNet-1.6 synset
@@ -96,37 +96,8 @@ def merge_asynset_with_wnjpn(asynsets):
     for pos in asynsets.keys():
         for offset in asynsets[pos].keys():
             if not "db-synset" in asynsets[pos][offset]: continue
-            word = _get_jpnword_from_synsets([asynsets[pos][offset]["db-synset"]])
-            if word: asynsets[pos][offset]["jpnwordid"] = str(word.wordid)
-
-    return asynsets
-
-# Get japanese word from japanese wordnet
-def _get_jpnword_from_synsets(synsets):
-    metadata = MetaData(DB, reflect=True)
-
-    jpnwords = []
-    sense = Table('sense', metadata)
-    sense_rows = DB.execute(sense.select(and_(
-        sense.c.lang == 'jpn',
-        sense.c.synset.in_(synsets)
-    ))).fetchall()
-    if len(sense_rows) == 0: return
-
-    word = Table('word', metadata)
-    word_row = DB.execute(word.select(and_(
-        word.c.wordid.in_([ row.wordid for row in sense_rows ])
-    ))).fetchone()
-
-    return word_row
-
-def merge_asynset_with_wnjpn2(asynsets):
-    for pos in asynsets.keys():
-        for offset in asynsets[pos].keys():
-            if not "db-synset" in asynsets[pos][offset]: continue
             db_synsets = _retrieve_similar_synset(WN.synset(asynsets[pos][offset]["synset"]))
-            words = _get_jpnword_from_synsets2(db_synsets)
-            asynsets[pos][offset]["jpnwords"] = words
+            asynsets[pos][offset]["jpnwords"] = _get_jpnword_from_synsets(db_synsets)
 
     return asynsets
 
@@ -174,7 +145,7 @@ def _get_similar_synsets(synset):
 
 
 # Get japanese word from japanese wordnet
-def _get_jpnword_from_synsets2(synsets):
+def _get_jpnword_from_synsets(synsets):
     metadata = MetaData(DB, reflect=True)
 
     jpnwords = []
@@ -210,7 +181,7 @@ def output_jpn_asynset(asynsets):
                         "pos": word.pos,
                     })
 
-    file = open("jpn-asynset2.xml", "w")
+    file = open("jpn-asynset.xml", "w")
     file.write(minidom.parseString(tostring(root)).toprettyxml(encoding='utf-8'))
     file.close()
 
@@ -218,6 +189,6 @@ def output_jpn_asynset(asynsets):
 if __name__ == '__main__':
     asynsets_16 = load_asynsets("resources/wn-affect-1.1/a-synsets.xml")
     asynsets_30 = merge_asynset_with_wn(asynsets_16)
-    asynsets_with_jpn = merge_asynset_with_wnjpn2(asynsets_30)
+    asynsets_with_jpn = merge_asynset_with_wnjpn(asynsets_30)
     output_jpn_asynset(asynsets_with_jpn)
 
