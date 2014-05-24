@@ -123,7 +123,6 @@ def _retrieve_similar_synset(synset):
     return similar_db_synsets
 
 # Get hyponyms, similar, verb groups, entailment, pertainym
-#     (derived forms)
 def _get_similar_synsets(synset):
     synsets = []
     synsets.append(synset.hyponyms())
@@ -131,14 +130,6 @@ def _get_similar_synsets(synset):
     synsets.append(synset.verb_groups())
     synsets.append(synset.entailments())
     for lemma in synset.lemmas:
-        # for derive_lemma in lemma.derivationally_related_forms():
-        #     try:
-        #         sim = derive_lemma.synset.wup_similarity(synset)
-        #         sim2 = derive_lemma.synset.path_similarity(synset)
-        #         print sim, sim2, synset, derive_lemma.synset
-        #         synsets.append([derive_lemma.synset])
-        #     except:
-        #         print "error"
         synsets.append(map(lambda x: x.synset, lemma.pertainyms()))
 
     return list(set(reduce(lambda x,y: x+y, synsets)))
