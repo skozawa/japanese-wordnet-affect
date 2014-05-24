@@ -1,2 +1,4 @@
 nltk
 SQLAlchemy
+xml.etree.ElementTree
+minidom
