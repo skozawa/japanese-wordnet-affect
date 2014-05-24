@@ -10,6 +10,7 @@ Requirements
 - python
 - [sqlite3](http://www.sqlite.org/download.html)
 - [WordNet-Affect](http://wndomains.fbk.eu/wnaffect.html)
+  - download and move to `resources/wn-affect-1.1`
 
 
 Set up
@@ -33,18 +34,30 @@ python create_jp_wn_affect.py
 Example
 ```
 <noun-syn-list>
-  <noun-syn jpnwordid="163121" offset="07507912" synset="confusion.n.03"/>
+  <noun-syn offset="07546389" synset="loyalty.n.02">
+    <jpn-word lemma="忠魂" pos="n" wordid="211296"/>
+    <jpn-word lemma="忠誠" pos="n" wordid="226847"/>
+    <jpn-word lemma="忠心" pos="n" wordid="238518"/>
+  </noun-syn>
   ...
 </noun-syn-list>
 <adv-syn-list>
-  <adv-syn caus-stat="stat" jpnwordid="191589" noun-synset="peace.n.03" offset="00418712" synset="peaceably.r.01"/>
+  <adv-syn caus-stat="stat" noun-synset="favor.n.04" offset="00230444" synset="favorably.r.01">
+    <jpn-word lemma="好意的に" pos="r" wordid="164889"/>
+    <jpn-word lemma="好ましい" pos="a" wordid="166551"/>
+    <jpn-word lemma="色良い" pos="a" wordid="167291"/>
+    ...
+  </adv-syn>
   ...
 </adv-syn-list>
 ```
 
-`offset` is offset for WordNet-3.0
-
-`synset` is synset for WordNet-3.0
-
-`jpnwordid` is wordid for word table in Japanese WordNet (sqlite)
+- (noun|adv|adj|verb)-syn
+  - `offset` is offset for WordNet-3.0
+  - `synset` is synset for WordNet-3.0
+  - `noun-synset` is offset of noun
+- jpn-word
+  - `wordid` is wordid for word table in Japanese WordNet (sqlite)
+  - `lemma` is japanese lemma
+  - `pos` is part-of-speech
 
