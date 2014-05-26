@@ -161,7 +161,7 @@ def output_jpn_asynset(asynsets):
         pos_node = SubElement(root, "%s-syn-list" % (pos))
         for offset, asynset in asynsets[pos].items():
             node = SubElement(pos_node, "%s-syn" % (pos))
-            for attr in ["offset", "synset", "caus-stat", "noun-synset", "jpnword", "jpnwordid"]:
+            for attr in ["offset", "synset", "categ", "caus-stat", "noun-synset", "jpnword", "jpnwordid"]:
                 if attr in asynset:
                     node.set(attr, asynset[attr])
             if "jpnwords" in asynset:
