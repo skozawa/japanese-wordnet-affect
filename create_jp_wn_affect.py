@@ -1,15 +1,21 @@
 # coding: utf-8
 import os
-os.environ["NLTK_DATA"] = os.getcwd()
 import xml.etree.ElementTree as ET
 from xml.etree.ElementTree import *
-import nltk
-from nltk.corpus import WordNetCorpusReader
 from sqlalchemy import *
 from xml.dom import minidom
+from sqlite3 import dbapi2 as sqlite
+from functools import reduce
 
-WN16 = WordNetCorpusReader(nltk.data.find('resources/wordnet-1.6/dict'))
-WN = WordNetCorpusReader(nltk.data.find('resources/WordNet-3.0/dict'))
+cwd = os.getcwd()
+os.environ["NLTK_DATA"] = cwd
+import nltk
+from nltk.corpus import WordNetCorpusReader
+
+WN16_DIR = "resources/wordnet-1.6/dict"
+WN30_DIR = "resources/WordNet-3.0/dict"
+WN16 = WordNetCorpusReader(cwd + "/" + WN16_DIR, nltk.data.find(WN16_DIR))
+WN = WordNetCorpusReader(cwd + "/" + WN30_DIR, nltk.data.find(WN30_DIR))
 DB = create_engine('sqlite:///resources/wnjpn.db')
 
 # load Wordnet-Affect synsets
@@ -58,12 +64,12 @@ def merge_asynset_with_wn(asynsets):
             if not synset_30:
                 asynsets[pos][offset]["missing"] = 1
             else:
-                (word, p, index) = synset_30.name.split(".")
+                (word, p, index) = synset_30.name().split(".")
                 asynsets[pos][offset]["word"] = word
-                asynsets[pos][offset]["synset"] = synset_30.name
+                asynsets[pos][offset]["synset"] = synset_30.name()
                 # db-synset is used to query the japanese wordnet (sqlite)
-                asynsets[pos][offset]["db-synset"] = str("%08d-%s" % (synset_30.offset, p))
-                asynsets[pos][offset]["offset"] = str("%08d" % (synset_30.offset))
+                asynsets[pos][offset]["db-synset"] = str("%08d-%s" % (synset_30.offset(), p))
+                asynsets[pos][offset]["offset"] = str("%08d" % (synset_30.offset()))
                 if "noun-offset" in asynsets[pos][offset]:
                     noffset = asynsets[pos][offset]["noun-offset"]
                     asynsets[pos][offset]["noun-synset"] = asynsets["noun"][noffset]["synset"]
@@ -73,7 +79,7 @@ def merge_asynset_with_wn(asynsets):
 # Get WordNet-3.0 synset
 # Similarity is calculated by wup_similarity
 def _wn30_synsets_from_wn16_synset(synset):
-    (word, p, index) = synset.name.split(".")
+    (word, p, index) = synset.name().split(".")
     # ADJ_SAT -> ADJ: DO NOT EXIST ADJ_SAT in wordnet.POS_LIST
     if p == 's': p = 'a'
     synsets = WN.synsets(word, p)
@@ -83,6 +89,9 @@ def _wn30_synsets_from_wn16_synset(synset):
     for i in range(len(synsets)):
         try:
             synset_sims[i] = synset.wup_similarity(synsets[i])
+            # fallback to 0 when similarity is None
+            if synset_sims[i] == None:
+                synset_sims[i] = 0
         except (RuntimeError, TypeError, NameError):
             # Set similarity to 0 in case of RuntimeError
             synset_sims[i] = 0
@@ -104,19 +113,19 @@ def merge_asynset_with_wnjpn(asynsets):
 # Retrieve similar synsets from WordNet
 def _retrieve_similar_synset(synset):
     if not synset: return []
-    similar_db_synsets = [str("%08d-%s" % (synset.offset, synset.pos))]
+    similar_db_synsets = [str("%08d-%s" % (synset.offset(), synset.pos()))]
     searched_words = {}
 
     synsets = [synset]
     while synsets:
         for synset in synsets:
-            searched_words[synset.name] = 1
+            searched_words[synset.name()] = 1
 
         nexts = []
         for synset in synsets:
             for syn in _get_similar_synsets(synset):
-                if not syn.name in searched_words:
-                    similar_db_synsets.append(str("%08d-%s" % (syn.offset, syn.pos)))
+                if not syn.name() in searched_words:
+                    similar_db_synsets.append(str("%08d-%s" % (syn.offset(), syn.pos())))
                     nexts.append(syn)
         synsets = nexts
 
@@ -129,8 +138,8 @@ def _get_similar_synsets(synset):
     synsets.append(synset.similar_tos())
     synsets.append(synset.verb_groups())
     synsets.append(synset.entailments())
-    for lemma in synset.lemmas:
-        synsets.append(map(lambda x: x.synset, lemma.pertainyms()))
+    for lemma in synset.lemmas():
+        synsets.append([x.synset() for x in lemma.pertainyms()])
 
     return list(set(reduce(lambda x,y: x+y, synsets)))
 
@@ -172,7 +181,7 @@ def output_jpn_asynset(asynsets):
                         "pos": word.pos,
                     })
 
-    file = open("jpn-asynset.xml", "w")
+    file = open("jpn-asynset.xml", "wb")
     file.write(minidom.parseString(tostring(root)).toprettyxml(encoding='utf-8'))
     file.close()
 
